@@ -301,6 +301,7 @@ def train_model():
         ema_err = ema_meter.get_epoch_stats(cur_epoch)["top1_err"]
         # Save a checkpoint
         file = cp.save_checkpoint(model, ema, optimizer, cur_epoch, test_err, ema_err)
+        cp.delete_checkpoints(keep="last")
         logger.info("Wrote checkpoint to: {}".format(file))
 
 
