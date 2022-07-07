@@ -1,12 +1,15 @@
 MODEL:
-  TYPE: regnet
+  TYPE: anynet
   NUM_CLASSES: 1000
-REGNET:
-  DEPTH: 23
-  W0: 256
-  WA: 72.0
-  WM: 2.2
-  GROUP_W: 256
+ANYNET:
+  STEM_TYPE: simple_stem_in
+  STEM_W: 32
+  BLOCK_TYPE: res_bottleneck_block
+  DEPTHS: [2, 7, 13, 1]
+  WIDTHS: [256, 512, 1280, 3072]
+  STRIDES: [2, 2, 2, 2]
+  BOT_MULS: [1.0, 1.0, 1.0, 1.0]
+  GROUP_WS: [256, 256, 256, 256]
 OPTIM:
   LR_POLICY: cos
   BASE_LR: 0.2

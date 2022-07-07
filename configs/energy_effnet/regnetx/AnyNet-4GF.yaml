@@ -1,0 +1,12 @@
+MODEL:
+  TYPE: anynet
+  NUM_CLASSES: 1000
+ANYNET:
+  STEM_TYPE: simple_stem_in
+  STEM_W: 32
+  BLOCK_TYPE: res_bottleneck_block
+  DEPTHS: [2, 5, 14, 2]
+  WIDTHS: [80, 240, 480, 960]
+  STRIDES: [2, 2, 2, 2]
+  BOT_MULS: [1.0, 1.0, 1.0, 1.0]
+  GROUP_WS: [80, 80, 80, 80]
