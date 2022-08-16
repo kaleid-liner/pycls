@@ -30,7 +30,10 @@ from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
 from fairscale.optim.grad_scaler import ShardedGradScaler
 from pycls.core.config import cfg
 from pycls.core.io import cache_url, pathmgr
+from pycls.core.net import unwrap_model
+from pycls.elastic.utils import bn_calibration_init
 
+from .arch_manager import ArchManager
 
 logger = logging.get_logger(__name__)
 
@@ -174,7 +177,7 @@ def get_weights_file(weights_file):
     return weights_file
 
 
-def train_epoch(loader, model, ema, loss_fun, optimizer, scaler, meter, cur_epoch):
+def train_epoch(loader, model, ema, loss_fun, optimizer, scaler, meters_, arch_manager, cur_epoch):
     """Performs one epoch of training."""
     # Shuffle the data
     if cfg.DATA_LOADER.MODE != data_loader.FFCV:
@@ -185,73 +188,134 @@ def train_epoch(loader, model, ema, loss_fun, optimizer, scaler, meter, cur_epoc
     # Enable training mode
     model.train()
     ema.train()
-    meter.reset()
-    meter.iter_tic()
+    for meter in meters_:
+        meter.reset()
     for cur_iter, (inputs, labels) in enumerate(loader):
-        # Transfer the data to the current GPU device
-        if cfg.DATA_LOADER.MODE != data_loader.FFCV:
-            inputs, labels = inputs.cuda(), labels.cuda(non_blocking=True)
-        # Convert labels to smoothed one-hot vector
-        labels_one_hot = net.smooth_one_hot_labels(labels)
-        # Apply mixup to the batch (no effect if mixup alpha is 0)
-        inputs, labels_one_hot, labels = net.mixup(inputs, labels_one_hot)
-        # Perform the forward pass and compute the loss
-        with amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
-            preds = model(inputs)
-            loss = loss_fun(preds, labels_one_hot)
-        # Perform the backward pass and update the parameters
-        optimizer.zero_grad()
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        # Update ema weights
-        net.update_model_ema(model, ema, cur_epoch, cur_iter)
-        # Compute the errors
-        top1_err, top5_err = meters.topk_errors(preds, labels, [1, 5])
-        # Combine the stats across the GPUs (no reduction if 1 GPU used)
-        loss, top1_err, top5_err = dist.scaled_all_reduce([loss, top1_err, top5_err])
-        # Copy the stats from GPU to CPU (sync point)
-        loss, top1_err, top5_err = loss.item(), top1_err.item(), top5_err.item()
-        meter.iter_toc()
-        # Update and log stats
-        mb_size = inputs.size(0) * cfg.NUM_GPUS
-        meter.update_stats(top1_err, top5_err, loss, lr, mb_size)
-        meter.log_iter_stats(cur_epoch, cur_iter)
-        meter.iter_tic()
+        for subnet_iter in range(cfg.TRAIN.ELASTIC_SIZE):
+            if subnet_iter == 0:
+                arch = arch_manager.sample_max()
+                meter = meters_[0]
+            elif subnet_iter == cfg.TRAIN.ELASTIC_SIZE - 1:
+                arch = arch_manager.sample_min()
+                meter = meters_[1]
+            else:
+                arch = arch_manager.random_sample()
+                meter = None
+            if meter is not None:
+                meter.iter_tic()
+            unwrap_model(model).set_active_subnet(**arch)
+            unwrap_model(ema).set_active_subnet(**arch)
+            # Transfer the data to the current GPU device
+            if cfg.DATA_LOADER.MODE != data_loader.FFCV:
+                inputs, labels = inputs.cuda(), labels.cuda(non_blocking=True)
+            # Convert labels to smoothed one-hot vector
+            labels_one_hot = net.smooth_one_hot_labels(labels)
+            # Apply mixup to the batch (no effect if mixup alpha is 0)
+            inputs, labels_one_hot, labels = net.mixup(inputs, labels_one_hot)
+            # Perform the forward pass and compute the loss
+            with amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
+                preds = model(inputs)
+                if subnet_iter == 0:
+                    loss = loss_fun(preds, labels_one_hot)
+                    soft_target = torch.nn.functional.softmax(preds, dim=1)
+                else:
+                    loss = loss_fun(preds, soft_target.detach())
+            # Perform the backward pass and update the parameters
+            optimizer.zero_grad()
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            # Update ema weights
+            net.update_model_ema(model, ema, cur_epoch, cur_iter)
+            # Compute the errors
+            top1_err, top5_err = meters.topk_errors(preds, labels, [1, 5])
+            # Combine the stats across the GPUs (no reduction if 1 GPU used)
+            loss, top1_err, top5_err = dist.scaled_all_reduce([loss, top1_err, top5_err])
+            # Copy the stats from GPU to CPU (sync point)
+            loss, top1_err, top5_err = loss.item(), top1_err.item(), top5_err.item()
+            if meter is not None:
+                meter.iter_toc()
+                # Update and log stats
+                mb_size = inputs.size(0) * cfg.NUM_GPUS
+                meter.update_stats(top1_err, top5_err, loss, lr, mb_size)
+                meter.log_iter_stats(cur_epoch, cur_iter, subnet_iter)
     # Log epoch stats
-    meter.log_epoch_stats(cur_epoch)
+    for meter in meters_:
+        meter.log_epoch_stats(cur_epoch)
 
 
 @torch.no_grad()
-def test_epoch(loader, model, meter, cur_epoch):
+def test_epoch(loader, model, meters_, arch_manager, cur_epoch):
     """Evaluates the model on the test set."""
     # Enable eval mode
     model.eval()
-    meter.reset()
-    meter.iter_tic()
-    for cur_iter, (inputs, labels) in enumerate(loader):
-        # Transfer the data to the current GPU device
-        if cfg.DATA_LOADER.MODE != "ffcv":
-            inputs, labels = inputs.cuda(), labels.cuda(non_blocking=True)
-        # Compute the predictions
-        with amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
-            preds = model(inputs)
-        # Compute the errors
-        top1_err, top5_err = meters.topk_errors(preds, labels, [1, 5])
-        # Combine the errors across the GPUs  (no reduction if 1 GPU used)
-        top1_err, top5_err = dist.scaled_all_reduce([top1_err, top5_err])
-        # Copy the errors from GPU to CPU (sync point)
-        top1_err, top5_err = top1_err.item(), top5_err.item()
-        meter.iter_toc()
-        # Update and log stats
-        meter.update_stats(top1_err, top5_err, inputs.size(0) * cfg.NUM_GPUS)
-        meter.log_iter_stats(cur_epoch, cur_iter)
+    for subnet_iter in range(2):
+        meter = meters_[subnet_iter]
+        meter.reset()
         meter.iter_tic()
+        if subnet_iter == 0:
+            arch = arch_manager.sample_max()
+        elif subnet_iter == 1:
+            arch = arch_manager.sample_min()
+        else:
+            arch = arch_manager.random_sample()
+        unwrap_model(model).set_active_subnet(**arch)
+            
+        for cur_iter, (inputs, labels) in enumerate(loader):
+            # Transfer the data to the current GPU device
+            if cfg.DATA_LOADER.MODE != "ffcv":
+                inputs, labels = inputs.cuda(), labels.cuda(non_blocking=True)
+            # Compute the predictions
+            with amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
+                preds = model(inputs)
+            # Compute the errors
+            top1_err, top5_err = meters.topk_errors(preds, labels, [1, 5])
+            # Combine the errors across the GPUs  (no reduction if 1 GPU used)
+            top1_err, top5_err = dist.scaled_all_reduce([top1_err, top5_err])
+            # Copy the errors from GPU to CPU (sync point)
+            top1_err, top5_err = top1_err.item(), top5_err.item()
+            meter.iter_toc()
+            # Update and log stats
+            meter.update_stats(top1_err, top5_err, inputs.size(0) * cfg.NUM_GPUS)
+            meter.log_iter_stats(cur_epoch, cur_iter)
+            meter.iter_tic()
+        # Log epoch stats
+        meter.log_epoch_stats(cur_epoch, subnet_iter)
+
+
+def cal_epoch(loader, model, meters_, arch_manager, cur_epoch):
+    model.eval()
+    model.apply(bn_calibration_init)
+
+    for meter in meters_:
+        meter.reset()
+
+    for cur_iter, (inputs, labels) in enumerate(loader):
+        for subnet_iter, arch in enumerate(arch_manager.iter_archs()):
+            meter = meters_[subnet_iter]
+            meter.iter_tic()
+            unwrap_model(model).set_active_subnet(**arch)
+            # Transfer the data to the current GPU device
+            if cfg.DATA_LOADER.MODE != "ffcv":
+                inputs, labels = inputs.cuda(), labels.cuda(non_blocking=True)
+            # Compute the predictions
+            with amp.autocast(enabled=cfg.TRAIN.MIXED_PRECISION):
+                preds = model(inputs)
+            # Compute the errors
+            top1_err, top5_err = meters.topk_errors(preds, labels, [1, 5])
+            # Combine the errors across the GPUs  (no reduction if 1 GPU used)
+            top1_err, top5_err = dist.scaled_all_reduce([top1_err, top5_err])
+            # Copy the errors from GPU to CPU (sync point)
+            top1_err, top5_err = top1_err.item(), top5_err.item()
+            meter.iter_toc()
+            # Update and log stats
+            meter.update_stats(top1_err, top5_err, inputs.size(0) * cfg.NUM_GPUS)
+            meter.log_iter_stats(cur_epoch, cur_iter)
     # Log epoch stats
-    meter.log_epoch_stats(cur_epoch)
+    meter.log_epoch_stats(cur_epoch, subnet_iter)
 
-
-def train_model():
+    
+def train_sandwich_elastic():
     """Trains the model."""
     # Setup training/testing environment
     setup_env()
@@ -259,6 +323,8 @@ def train_model():
     model, ema = setup_model()
     loss_fun = builders.build_loss_fun().cuda()
     optimizer = optim.construct_optimizer(model)
+    # Construct arch manager
+    arch_manager = ArchManager()
     # Load checkpoint or initial weights
     start_epoch = 0
     if cfg.TRAIN.AUTO_RESUME and cp.has_checkpoint():
@@ -273,9 +339,9 @@ def train_model():
     # Create data loaders and meters
     train_loader = data_loader.construct_train_loader()
     test_loader = data_loader.construct_test_loader()
-    train_meter = meters.TrainMeter(len(train_loader))
-    test_meter = meters.TestMeter(len(test_loader))
-    ema_meter = meters.TestMeter(len(test_loader), "test_ema")
+    train_meters = [meters.TrainMeter(len(train_loader)) for _ in range(2)]
+    test_meters = [meters.TestMeter(len(test_loader)) for _ in range(2)]
+    ema_meters = [meters.TestMeter(len(test_loader), "test_ema") for _ in range(2)]
     # Create a GradScaler for mixed precision training
     if cfg.FSDP.ENABLED:
         scaler = ShardedGradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)
@@ -288,20 +354,20 @@ def train_model():
     logger.info("Start epoch: {}".format(start_epoch + 1))
     for cur_epoch in range(start_epoch, cfg.OPTIM.MAX_EPOCH):
         # Train for one epoch
-        params = (train_loader, model, ema, loss_fun, optimizer, scaler, train_meter)
+        params = (train_loader, model, ema, loss_fun, optimizer, scaler, train_meters, arch_manager)
         train_epoch(*params, cur_epoch)
         # Compute precise BN stats
         if cfg.BN.USE_PRECISE_STATS:
             net.compute_precise_bn_stats(model, train_loader)
             net.compute_precise_bn_stats(ema, train_loader)
         # Evaluate the model
-        test_epoch(test_loader, model, test_meter, cur_epoch)
-        test_epoch(test_loader, ema, ema_meter, cur_epoch)
-        test_err = test_meter.get_epoch_stats(cur_epoch)["top1_err"]
-        ema_err = ema_meter.get_epoch_stats(cur_epoch)["top1_err"]
+        test_epoch(test_loader, model, test_meters, arch_manager, cur_epoch)
+        test_epoch(test_loader, ema, ema_meters, arch_manager, cur_epoch)
+        test_err = max(test_meter.get_epoch_stats(cur_epoch)["top1_err"] for test_meter in test_meters)
+        ema_err = max(ema_meter.get_epoch_stats(cur_epoch)["top1_err"] for ema_meter in ema_meters)
         # Save a checkpoint
         file = cp.save_checkpoint(model, ema, optimizer, cur_epoch, test_err, ema_err)
-        # cp.delete_checkpoints(keep="last")
+        cp.delete_checkpoints(keep="last")
         logger.info("Wrote checkpoint to: {}".format(file))
 
 
@@ -320,6 +386,32 @@ def test_model():
     test_meter = meters.TestMeter(len(test_loader))
     # Evaluate the model
     test_epoch(test_loader, model, test_meter, 0)
+
+    
+def cal_model():
+    """Calibrate a trained model."""
+    setup_env()
+    model, ema = setup_model()
+    arch_manager = ArchManager()
+    test_weights = get_weights_file(cfg.TEST.WEIGHTS)
+    cp.load_checkpoint(test_weights, model, ema)
+    logger.info("Loaded model weights from: {}".format(test_weights))
+    # Create data loaders and meters
+    train_loader = data_loader.construct_train_loader()
+    test_loader = data_loader.construct_test_loader()
+    cal_meters = [meters.TestMeter(len(train_loader), phase="cal_arch{}".format(i)) for i in range(arch_manager.len_archs)]
+    cal_ema_meters = [meters.TestMeter(len(train_loader), phase="cal_ema_arch{}".format(i)) for i in range(arch_manager.len_archs)]
+    test_meters = [meters.TestMeter(len(test_loader), phase="test_arch{}".format(i)) for i in range(arch_manager.len_archs)]
+    test_ema_meters = [meters.TestMeter(len(test_loader), phase="test_ema_arch{}".format(i)) for i in range(arch_manager.len_archs)]
+    # Calibrate the model
+    cal_epoch(train_loader, model, cal_meters, arch_manager, 0)
+    # cal_epoch(train_loader, ema, cal_ema_meters, arch_manager, 0)
+    # Save checkpoint
+    file = cp.save_checkpoint(model, ema, optim.construct_optimizer(model), 0, 0, 0)
+    logger.info("Wrote checkpoint to: {}".format(file))
+    # Evaluate the model
+    test_epoch(test_loader, model, test_meters, arch_manager, 0)
+    # test_epoch(test_loader, ema, test_ema_meters, arch_manager, 0)
 
 
 def time_model():
@@ -345,3 +437,7 @@ def time_model_and_loader():
     test_loader = data_loader.construct_test_loader()
     # Compute model and loader timings
     benchmark.compute_time_full(model, loss_fun, train_loader, test_loader)
+
+
+
+    

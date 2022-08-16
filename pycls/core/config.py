@@ -97,6 +97,43 @@ _C.ANYNET.SE_ON = False
 _C.ANYNET.SE_R = 0.25
 
 
+# ---------------------------------- DynamicAnyNet options --------------------------- #
+_C.DYNAMICANYNET = CfgNode()
+
+# Stem type
+_C.DYNAMICANYNET.STEM_TYPE = "simple_stem_in"
+
+# Stem width
+_C.DYNAMICANYNET.STEM_W = []
+
+# Block type
+_C.DYNAMICANYNET.BLOCK_TYPE = "res_bottleneck_block"
+
+# Depth for each stage (number of blocks in the stage)
+_C.DYNAMICANYNET.DEPTHS = []
+
+# Width for each stage (width of each block in the stage)
+_C.DYNAMICANYNET.WIDTHS = []
+
+# Strides for each stage (applies to the first block of each stage)
+_C.DYNAMICANYNET.STRIDES = []
+
+# Bottleneck multipliers for each stage (applies to bottleneck block)
+_C.DYNAMICANYNET.BOT_MULS = []
+
+# Group widths for each stage (applies to bottleneck block)
+_C.DYNAMICANYNET.GROUPS = []
+
+# Head width for first conv in head (if 0 conv is omitted, as is the default)
+_C.DYNAMICANYNET.HEAD_W = 0
+
+# Whether SE is enabled for res_bottleneck_block
+_C.DYNAMICANYNET.SE_ON = False
+
+# SE ratio
+_C.DYNAMICANYNET.SE_R = 0.25
+
+
 # ---------------------------------- RegNet options ---------------------------------- #
 _C.REGNET = CfgNode()
 
@@ -260,6 +297,8 @@ _C.OPTIM.LR_MULT = 0.1
 # Maximal number of epochs
 _C.OPTIM.MAX_EPOCH = 200
 
+_C.OPTIM.MIN_EPOCH = 0
+
 # Momentum
 _C.OPTIM.MOMENTUM = 0.9
 
@@ -332,6 +371,9 @@ _C.TRAIN.PCA_STD = 0.1
 # Data augmentation to use ("", "AutoAugment", "RandAugment_N2_M0.5", etc.)
 _C.TRAIN.AUGMENT = ""
 
+# Elastic subnet size
+_C.TRAIN.ELASTIC_SIZE = 4
+
 
 # --------------------------------- Testing options ---------------------------------- #
 _C.TEST = CfgNode()
@@ -348,6 +390,8 @@ _C.TEST.IM_SIZE = 256
 
 # Weights to use for testing
 _C.TEST.WEIGHTS = ""
+
+_C.TEST.ADDITIONAL_ARCHS = []
 
 
 # ------------------------------- Data loader options -------------------------------- #
@@ -451,6 +495,9 @@ _C.PORT_RANGE = [10000, 65000]
 
 # Models weights referred to by URL are downloaded to this local cache
 _C.DOWNLOAD_CACHE = "/tmp/pycls-download-cache"
+
+# Dataset path
+_C.DATA_PATH = ""
 
 
 # ---------------------------------- Default config ---------------------------------- #

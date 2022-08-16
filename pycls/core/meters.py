@@ -10,10 +10,13 @@
 from collections import deque
 
 import numpy as np
+from pycls.core.distributed import is_main_proc
 import pycls.core.logging as logging
 import torch
 from pycls.core.config import cfg
 from pycls.core.timer import Timer
+
+from tensorboard_logger import log_value
 
 
 logger = logging.get_logger(__name__)
@@ -147,10 +150,17 @@ class TrainMeter(object):
         }
         return stats
 
-    def log_iter_stats(self, cur_epoch, cur_iter):
+    def log_iter_stats(self, cur_epoch, cur_iter, subnet_iter=0):
+        cur_iter_total = cur_epoch * self.epoch_iters + cur_iter + 1
+        stats = self.get_iter_stats(cur_epoch, cur_iter)
         if (cur_iter + 1) % cfg.LOG_PERIOD == 0:
-            stats = self.get_iter_stats(cur_epoch, cur_iter)
             logger.info(logging.dump_log_data(stats, self.phase + "_iter"))
+
+        if is_main_proc():
+            base_name = "subnet{}".format(subnet_iter)
+            log_value(base_name + "_top1_err", stats["top1_err"], cur_iter_total)
+            log_value(base_name + "_top5_err", stats["top5_err"], cur_iter_total)
+            log_value(base_name + "_loss", stats["loss"], cur_iter_total)
 
     def get_epoch_stats(self, cur_epoch):
         cur_iter_total = (cur_epoch + 1) * self.epoch_iters
@@ -255,6 +265,11 @@ class TestMeter(object):
         }
         return stats
 
-    def log_epoch_stats(self, cur_epoch):
+    def log_epoch_stats(self, cur_epoch, subnet_iter=0):
         stats = self.get_epoch_stats(cur_epoch)
         logger.info(logging.dump_log_data(stats, self.phase + "_epoch"))
+
+        if is_main_proc():
+            base_name = "subnet{}_{}_epoch".format(subnet_iter, self.phase)
+            log_value(base_name + "_top1_err", stats["top1_err"], cur_epoch)
+            log_value(base_name + "_top5_err", stats["top5_err"], cur_epoch)

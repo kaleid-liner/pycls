@@ -18,6 +18,8 @@ import simplejson
 from pycls.core.config import cfg
 from pycls.core.io import pathmgr
 
+from tensorboard_logger import configure
+
 
 # Show filename and line number in logs
 _FORMAT = "[%(filename)s: %(lineno)3d]: %(message)s"
@@ -57,6 +59,7 @@ def setup_logging():
             logging_config["filename"] = os.path.join(cfg.OUT_DIR, _LOG_FILE)
         # Configure logging
         logging.basicConfig(**logging_config)
+        configure(os.path.join(cfg.OUT_DIR, "tensorboards"))
     else:
         _suppress_print()
 

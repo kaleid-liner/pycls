@@ -121,7 +121,7 @@ def get_lr_fun():
 def get_epoch_lr(cur_epoch):
     """Retrieves the lr for the given epoch according to the policy."""
     # Get lr and scale by by BASE_LR
-    lr = get_lr_fun()(cur_epoch) * cfg.OPTIM.BASE_LR
+    lr = get_lr_fun()(cur_epoch - cfg.OPTIM.MIN_EPOCH) * cfg.OPTIM.BASE_LR
     # Linear warmup
     if cur_epoch < cfg.OPTIM.WARMUP_EPOCHS:
         alpha = cur_epoch / cfg.OPTIM.WARMUP_EPOCHS

@@ -12,6 +12,8 @@ import random
 
 import submitit
 import torch
+import torch.distributed as dist
+import pickle
 from pycls.core.config import cfg
 
 
@@ -75,6 +77,44 @@ def scaled_all_reduce(tensors):
     for tensor in tensors:
         tensor.mul_(1.0 / cfg.NUM_GPUS)
     return tensors
+
+    
+def _serialize_to_tensor(data, group=None):
+    device = torch.cuda.current_device()
+
+    buffer = pickle.dumps(data)
+    if len(buffer) > 1024 ** 3:
+        import logging
+        logger = logging.getLogger('global')
+        logger.warning(
+            "Rank {} trying to all-gather {:.2f} GB of data on device {}".format(
+                dist.get_rank(), len(buffer) / (1024 ** 3), device
+            )
+        )
+    storage = torch.ByteStorage.from_buffer(buffer)
+    tensor = torch.ByteTensor(storage).to(device=device)
+    return tensor
+
+    
+def broadcast_object(obj, group=None):
+    """ broadcast object that could be pickled
+    """
+    if cfg.NUM_GPUS == 1:
+        return obj
+
+    serialized_tensor = _serialize_to_tensor(obj).cuda()
+    numel = torch.IntTensor([serialized_tensor.numel()]).cuda()
+
+    dist.broadcast(numel, 0)
+
+    serialized_tensor = serialized_tensor.clone()
+    serialized_tensor.resize_(numel)
+
+    dist.broadcast(serialized_tensor, 0)
+
+    serialized_bytes = serialized_tensor.cpu().numpy().tobytes()
+    deserialized_obj = pickle.loads(serialized_bytes)
+    return deserialized_obj
 
 
 def setup_distributed(cfg_state):

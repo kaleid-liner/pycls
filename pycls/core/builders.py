@@ -14,6 +14,7 @@ from pycls.models.effnet import EffNet
 from pycls.models.regnet import RegNet
 from pycls.models.resnet import ResNet
 from pycls.models.vit import ViT
+from pycls.elastic.dynamic_net import DynamicAnyNet
 
 
 # Supported models
@@ -23,6 +24,7 @@ _models = {
     "resnet": ResNet,
     "regnet": RegNet,
     "vit": ViT,
+    "dynamicanynet": DynamicAnyNet,
 }
 
 

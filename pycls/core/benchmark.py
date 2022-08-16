@@ -53,7 +53,7 @@ def compute_time_train(model, loss_fun):
     labels = torch.zeros(batch_size, dtype=torch.int64).cuda(non_blocking=False)
     labels_one_hot = net.smooth_one_hot_labels(labels)
     # Cache BatchNorm2D running stats
-    bns = [m for m in model.modules() if isinstance(m, torch.nn.BatchNorm2d)]
+    bns = [m for m in model.modules() if isinstance(m, torch.nn.BatchNorm2d) and m.running_mean is not None]
     bn_stats = [[bn.running_mean.clone(), bn.running_var.clone()] for bn in bns]
     # Create a GradScaler for mixed precision training
     scaler = amp.GradScaler(enabled=cfg.TRAIN.MIXED_PRECISION)

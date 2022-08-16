@@ -17,12 +17,13 @@ import pycls.core.net as net
 import pycls.core.trainer as trainer
 import pycls.models.scaler as scaler
 from pycls.core.config import cfg
+import pycls.elastic.sandwich_trainer as sandwich_trainer
 
 
 def parse_args():
     """Parse command line options (mode and config)."""
     parser = argparse.ArgumentParser(description="Run a model.")
-    help_s, choices = "Run mode", ["info", "train", "test", "time", "scale"]
+    help_s, choices = "Run mode", ["info", "train", "elastic_train", "cal", "test", "time", "scale"]
     parser.add_argument("--mode", help=help_s, choices=choices, required=True, type=str)
     help_s = "Config file location"
     parser.add_argument("--cfg", help=help_s, required=True, type=str)
@@ -47,6 +48,10 @@ def main():
         print("complexity:", net.complexity(builders.get_model()))
     elif mode == "train":
         dist.multi_proc_run(num_proc=cfg.NUM_GPUS, fun=trainer.train_model)
+    elif mode == "elastic_train":
+        dist.multi_proc_run(num_proc=cfg.NUM_GPUS, fun=sandwich_trainer.train_sandwich_elastic)
+    elif mode == "cal":
+        dist.multi_proc_run(num_proc=cfg.NUM_GPUS, fun=sandwich_trainer.cal_model)
     elif mode == "test":
         dist.multi_proc_run(num_proc=cfg.NUM_GPUS, fun=trainer.test_model)
     elif mode == "time":

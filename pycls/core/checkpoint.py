@@ -121,11 +121,11 @@ def load_checkpoint(checkpoint_file, model, model_ema=None, optimizer=None):
     # Load model and optionally model_ema weights (with backward compatibility)
     ema_state = "ema_state" if "ema_state" in checkpoint else "model_state"
     if model_ema:
-        unwrap_model(model).load_state_dict(checkpoint["model_state"])
-        unwrap_model(model_ema).load_state_dict(checkpoint[ema_state])
+        unwrap_model(model).load_state_dict(checkpoint["model_state"], strict=False)
+        unwrap_model(model_ema).load_state_dict(checkpoint[ema_state], strict=False)
     else:
         best_state = "model_state" if test_err <= ema_err else ema_state
-        unwrap_model(model).load_state_dict(checkpoint[best_state])
+        unwrap_model(model).load_state_dict(checkpoint[best_state], strict=False)
     # Load optimizer if requested
     if optimizer:
         optimizer.load_state_dict(checkpoint["optimizer_state"])

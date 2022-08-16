@@ -2,7 +2,7 @@ black==19.3b0
 isort==4.3.21
 iopath
 fairscale
-ffcv
+# ffcv
 flake8
 pyyaml
 matplotlib
@@ -14,3 +14,8 @@ simplejson
 submitit
 yacs
 yattag
+torch==1.10.0
+torchvision==0.11.1
+tensorflow
+tensorboard-logger
+onnx
