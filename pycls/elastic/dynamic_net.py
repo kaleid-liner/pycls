@@ -55,6 +55,13 @@ class DynamicAnyStage(DynamicModule):
             stride, w_in = 1, w_out
         return cx
 
+    @staticmethod
+    def gen_ir(ir, hw, w_in, w_out, stride, d, block_fun, params):
+        for _ in range(d):
+            ir, hw = block_fun.gen_ir(ir, hw, w_in, w_out, stride, params)
+            stride, w_in = 1, w_out
+        return ir, hw
+
         
 class DynamicAnyNet(DynamicModule):
     
@@ -116,3 +123,23 @@ class DynamicAnyNet(DynamicModule):
             prev_w = w
         cx = DynamicAnyHead.complexity(cx, prev_w, p["head_w"], p["num_classes"])
         return cx
+
+    @staticmethod
+    def gen_ir(ir=None, hw=224, widths=None, groups=None, params=None):
+        if ir is None:
+            ir = []
+        p = DynamicAnyNet.get_params() if not params else params
+        p["widths"] = widths or [max(w) for w in p["widths"]]
+        p["groups"] = groups or [min(g) for g in p["groups"]]
+        p["stem_w"] = max(p["stem_w"])
+        stem_fun = get_stem_fun(p["stem_type"])
+        block_fun = get_block_fun(p["block_type"])
+        ir, hw = stem_fun.gen_ir(ir, hw, 3, p["stem_w"])
+        prev_w = p["stem_w"]
+        keys = ["depths", "widths", "strides", "bot_muls", "groups"]
+        for d, w, s, b, g in zip(*[p[k] for k in keys]):
+            params = {"bot_mul": b, "groups": g, "se_r": p["se_r"]}
+            ir, hw = DynamicAnyStage.gen_ir(ir, hw, prev_w, w, s, d, block_fun, params)
+            prev_w = w
+        ir, hw = DynamicAnyHead.gen_ir(ir, hw, prev_w, p["head_w"], [["num_classes"]])
+        return ir

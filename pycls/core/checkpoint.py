@@ -135,6 +135,8 @@ def load_checkpoint(checkpoint_file, model, model_ema=None, optimizer=None):
 def delete_checkpoints(checkpoint_dir=None, keep="all"):
     """Deletes unneeded checkpoints, keep can be "all", "last", or "none"."""
     assert keep in ["all", "last", "none"], "Invalid keep setting: {}".format(keep)
+    if not dist.is_main_proc():
+        return
     checkpoint_dir = checkpoint_dir if checkpoint_dir else get_checkpoint_dir()
     if keep == "all" or not pathmgr.exists(checkpoint_dir):
         return 0

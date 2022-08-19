@@ -12,13 +12,16 @@ class ArchManager:
         self.groups = p["groups"]
         self.additional_archs = cfg.TEST.ADDITIONAL_ARCHS
 
-    def _sample(self, funcs, sync=True):
+        max_arch = self.sample_max()
+        self.group_widths = [w // g for w, g in zip(max_arch["widths"], max_arch["groups"])]
+
+    def _sample(self, funcs, sync=True, validate=True):
         while True:
             arch = {
                 "widths": [funcs["w"](stage_candidates) for stage_candidates in self.widths],
                 "groups": [funcs["g"](stage_candidates) for stage_candidates in self.groups],
             }
-            if self.validate(arch):
+            if not validate or self.validate(arch):
                 break
 
         if sync and cfg.NUM_GPUS > 1:
@@ -26,18 +29,17 @@ class ArchManager:
         
         return arch
 
-    @staticmethod
-    def validate(arch):
-        for w, g in zip(arch["widths"], arch["groups"]):
-            if (w % g != 0) or ((w // g) % 8 != 0):
+    def validate(self, arch):
+        for w, g, gw in zip(arch["widths"], arch["groups"], self.group_widths):
+            if (w % g != 0) or ((w // g) % 8 != 0) or (gw % (w // g) != 0):
                 return False
         return True
 
     def sample_max(self):
-        return self._sample({"w": max, "g": min})
+        return self._sample({"w": max, "g": min}, validate=False)
 
     def sample_min(self):
-        return self._sample({"w": min, "g": max})
+        return self._sample({"w": min, "g": max}, validate=False)
         
     def random_sample(self):
         return self._sample({"w": random.choice, "g": random.choice})

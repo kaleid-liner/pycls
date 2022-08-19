@@ -8,6 +8,11 @@ from pycls.models.blocks import (
     norm2d_cx,
     pool2d_cx,
 )
+from .ir_gen import (
+    conv2d_ir,
+    gap2d_ir,
+    linear_ir,
+)
 
 
 class DynamicModule(nn.Module):
@@ -56,6 +61,13 @@ class DynamicResBottleneckBlock(DynamicModule):
         cx = DynamicBottleneckTransform.complexity(cx, w_in, w_out, stride, params)
         return cx
 
+    @staticmethod
+    def gen_ir(ir, hw, w_in, w_out, stride, params):
+        if (w_in != w_out) or (stride != 1):
+            ir, _ = conv2d_ir(ir, hw, w_in, w_out, 1, stride, type="conv-bn-relu")
+        ir, hw = DynamicBottleneckTransform.gen_ir(ir, hw, w_in, w_out, stride, params)
+        return ir, hw
+        
 
 class DynamicBottleneckTransform(DynamicModule):
     """Bottleneck transformation: 1x1, 3x3 [+SE], 1x1."""
@@ -115,6 +127,16 @@ class DynamicBottleneckTransform(DynamicModule):
         cx = norm2d_cx(cx, w_out)
         return cx
 
+    @staticmethod
+    def gen_ir(ir, hw, w_in, w_out, stride, params):
+        w_b = int(round(w_out * params["bot_mul"]))
+        w_se = int(round(w_in * params["se_r"]))
+        groups = params["groups"]
+        ir, hw = conv2d_ir(ir, hw, w_in, w_b, 1, type="conv-bn-relu")
+        ir, hw = conv2d_ir(ir, hw, w_b, w_b, 3, stride, groups, type="conv-bn-relu")
+        ir, hw = conv2d_ir(ir, hw, w_b, w_out, 1, type="conv-bn")
+        return ir, hw
+
 
 class DynamicSimpleStem(DynamicModule):
     """Simple stem for ImageNet: 3x3, BN, AF."""
@@ -140,6 +162,11 @@ class DynamicSimpleStem(DynamicModule):
         cx = conv2d_cx(cx, w_in, w_out, 3, stride=2)
         cx = norm2d_cx(cx, w_out)
         return cx
+
+    @staticmethod
+    def gen_ir(ir, hw, w_in, w_out):
+        ir, hw = conv2d_ir(ir, hw, w_in, w_out, 3, 2, type="conv-bn-relu")
+        return ir, hw
 
 
 class DynamicAnyHead(DynamicModule):
@@ -167,3 +194,12 @@ class DynamicAnyHead(DynamicModule):
         cx = gap2d_cx(cx, w_in)
         cx = linear_cx(cx, w_in, num_classes, bias=True)
         return cx
+
+    @staticmethod
+    def gen_ir(ir, hw, w_in, head_width, num_classes):
+        if head_width > 0:
+            ir, hw = conv2d_ir(ir, hw, w_in, head_width, 1, type="conv-bn-relu")
+            w_in = head_width
+        ir, hw = gap2d_ir(ir, hw, w_in)
+        ir, hw = linear_ir(ir, hw, w_in, num_classes)
+        return ir, hw

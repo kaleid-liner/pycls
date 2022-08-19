@@ -367,7 +367,7 @@ def train_sandwich_elastic():
         ema_err = max(ema_meter.get_epoch_stats(cur_epoch)["top1_err"] for ema_meter in ema_meters)
         # Save a checkpoint
         file = cp.save_checkpoint(model, ema, optimizer, cur_epoch, test_err, ema_err)
-        cp.delete_checkpoints(keep="last")
+        # cp.delete_checkpoints(keep="last")
         logger.info("Wrote checkpoint to: {}".format(file))
 
 
