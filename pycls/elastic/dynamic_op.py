@@ -240,7 +240,7 @@ class SuperDynamicGroupConv2d(nn.Module):
 
     def get_active_filter(self, w_out, w_in, kernel_size, groups):
         start, end = sub_filter_start_end(self.max_kernel_size, kernel_size)
-        filters = self.conv.weight[:, :, start:end, start:end]
+        filters = self.conv.weight[:w_out, :, start:end, start:end]
 
         sub_filters = torch.chunk(filters, groups, dim=0)
         sub_w_out = w_out // groups
@@ -251,7 +251,7 @@ class SuperDynamicGroupConv2d(nn.Module):
         for i, sub_filter in enumerate(sub_filters):
             part_id = i % sub_ratio
             start = part_id * sub_w_in
-            filter_crops.append(sub_filter[:sub_w_out, start:start+sub_w_in, :, :])
+            filter_crops.append(sub_filter[:, start:start+sub_w_in, :, :])
         filters = torch.cat(filter_crops, dim=0)
         return filters
 
