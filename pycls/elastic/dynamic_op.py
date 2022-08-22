@@ -251,7 +251,7 @@ class SuperDynamicGroupConv2d(nn.Module):
         for i, sub_filter in enumerate(sub_filters):
             part_id = i % sub_ratio
             start = part_id * sub_w_in
-            filter_crops.append(sub_filter[:sub_w_out, :sub_w_in, :, :])
+            filter_crops.append(sub_filter[:sub_w_out, start:start+sub_w_in, :, :])
         filters = torch.cat(filter_crops, dim=0)
         return filters
 
@@ -275,6 +275,24 @@ class SuperDynamicGroupConv2d(nn.Module):
             self.dilation,
             groups,
         )
+        return y
+        
+
+class SwitchableBatchNorm2d(nn.Module):
+    def __init__(self, num_features_list):
+        super(SwitchableBatchNorm2d, self).__init__()
+        self.num_features_list = num_features_list
+        self.num_features = max(num_features_list)
+        bns = []
+        for i in num_features_list:
+            bns.append(nn.BatchNorm2d(i))
+        self.bn = nn.ModuleList(bns)
+        self.tracked_widths = num_features_list
+
+    def forward(self, input):
+        c = input.size(1)
+        idx = self.tracked_widths.index(c)
+        y = self.bn[idx](input)
         return y
 
 

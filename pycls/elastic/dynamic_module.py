@@ -1,5 +1,11 @@
 import torch.nn as nn
-from .dynamic_op import DynamicConv2d, DynamicBatchNorm2d, SuperDynamicGroupConv2d, DynamicLinear
+from .dynamic_op import (
+    DynamicConv2d,
+    DynamicBatchNorm2d,
+    SuperDynamicGroupConv2d,
+    DynamicLinear,
+    SwitchableBatchNorm2d,
+)
 from pycls.models.blocks import activation, SE, norm2d, gap2d, linear
 from pycls.models.blocks import (
     conv2d_cx,
@@ -38,7 +44,7 @@ class DynamicResBottleneckBlock(DynamicModule):
 
         if (max_w_in != max_w_out) or (stride != 1):
             self.proj = DynamicConv2d(max_w_in, max_w_out, stride=stride)
-            self.bn = DynamicBatchNorm2d(w_out_list)
+            self.bn = SwitchableBatchNorm2d(w_out_list)
 
         self.f = DynamicBottleneckTransform(w_in_list, w_out_list, stride, params)
         self.af = activation()
@@ -85,14 +91,14 @@ class DynamicBottleneckTransform(DynamicModule):
         min_groups = params["min_groups"]
 
         self.a = DynamicConv2d(max_w_in, max_w_b)
-        self.a_bn = DynamicBatchNorm2d(w_b_list)
+        self.a_bn = SwitchableBatchNorm2d(w_b_list)
         self.a_af = activation()
         self.b = SuperDynamicGroupConv2d(max_w_b, max_w_b, 3, stride=stride, min_groups=min_groups)
-        self.b_bn = DynamicBatchNorm2d(w_b_list)
+        self.b_bn = SwitchableBatchNorm2d(w_b_list)
         self.b_af = activation()
         self.se = SE(max_w_b, w_se) if w_se else None # TODO: DynamicSE
         self.c = DynamicConv2d(max_w_b, max_w_out)
-        self.c_bn = DynamicBatchNorm2d(w_out_list)
+        self.c_bn = SwitchableBatchNorm2d(w_out_list)
         self.c_bn.final_bn = True
 
         self.active_w_out = max_w_out

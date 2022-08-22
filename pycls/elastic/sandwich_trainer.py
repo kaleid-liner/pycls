@@ -164,7 +164,7 @@ def setup_model():
     if cfg.NUM_GPUS > 1 and not cfg.FSDP.ENABLED:
         # Make model replica operate on the current device
         ddp = torch.nn.parallel.DistributedDataParallel
-        model = ddp(module=model, device_ids=[cur_device], output_device=cur_device)
+        model = ddp(module=model, device_ids=[cur_device], output_device=cur_device, find_unused_parameters=True)
     return model, ema_model
 
 
