@@ -53,7 +53,7 @@ def _construct_loader(dataset_name, split, batch_size, shuffle, drop_last):
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=(False if sampler else shuffle),
+        shuffle=(False if sampler is not None else shuffle),
         sampler=sampler,
         num_workers=cfg.DATA_LOADER.NUM_WORKERS,
         pin_memory=cfg.DATA_LOADER.PIN_MEMORY,

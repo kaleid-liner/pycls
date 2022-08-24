@@ -222,9 +222,8 @@ def train_epoch(loader, model, ema, loss_fun, optimizer, scaler, meters_, arch_m
                     loss = loss_fun(preds, soft_target.detach())
             # Perform the backward pass and update the parameters
             optimizer.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            loss.backward()
+            optimizer.step()
             # Update ema weights
             net.update_model_ema(model, ema, cur_epoch, cur_iter)
             # Compute the errors

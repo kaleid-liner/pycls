@@ -29,9 +29,11 @@ class ArchManager:
         
         return arch
 
-    def validate(self, arch):
+    def validate(self, arch, aligned=False):
         for w, g, gw in zip(arch["widths"], arch["groups"], self.group_widths):
-            if (w % g != 0) or ((w // g) % 8 != 0) or (gw % (w // g) != 0):
+            if (w % g != 0) or ((w // g) % 8 != 0):
+                return False
+            if aligned and (gw % (w // g) != 0):
                 return False
         return True
 

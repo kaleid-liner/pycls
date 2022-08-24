@@ -334,6 +334,8 @@ _C.OPTIM.EMA_UPDATE_PERIOD = 32
 # Enable usage of multi tensor apply optimizers for better performance.
 _C.OPTIM.MTA = False
 
+_C.OPTIM.STEP = 1.0
+
 # --------------------------------- Training options --------------------------------- #
 _C.TRAIN = CfgNode()
 

@@ -109,6 +109,10 @@ def lr_fun_lin(cur_epoch):
     return (1.0 - cfg.OPTIM.MIN_LR) * lr + cfg.OPTIM.MIN_LR
 
 
+def lr_fun_exp2(cur_epoch):
+    return cfg.OPTIM.LR_MULT ** (cur_epoch / cfg.OPTIM.STEP)
+
+
 def get_lr_fun():
     """Retrieves the specified lr policy function"""
     lr_fun = "lr_fun_" + cfg.OPTIM.LR_POLICY

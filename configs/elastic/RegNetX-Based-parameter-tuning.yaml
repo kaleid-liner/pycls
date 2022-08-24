@@ -1,0 +1,36 @@
+MODEL:
+  TYPE: dynamicanynet
+  NUM_CLASSES: 1000
+DYNAMICANYNET:
+  STEM_TYPE: simple_stem_in
+  STEM_W: [32]
+  BLOCK_TYPE: res_bottleneck_block
+  DEPTHS: [2, 4, 10, 2]
+  WIDTHS: [[32, 64, 128], [64, 128, 256, 384], [128, 256, 384, 512, 768], [768, 1152, 1728, 2304]]
+  STRIDES: [2, 2, 2, 2]
+  BOT_MULS: [1.0, 1.0, 1.0, 1.0]
+  GROUPS: [[2, 4], [4, 8], [6, 8, 12, 16], [16, 24, 32]]
+OPTIM:
+  LR_POLICY: exp2
+  BASE_LR: 0.8
+  MAX_EPOCH: 300
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 5e-5
+  WARMUP_EPOCHS: 5
+  STEP: 2.4
+  LR_MULT: 0.97
+BN:
+  ZERO_INIT_FINAL_GAMMA: True
+  USE_PRECISE_STATS: False
+TRAIN:
+  DATASET: imagenet
+  IM_SIZE: 224
+  BATCH_SIZE: 512
+  ELASTIC_SIZE: 4
+TEST:
+  DATASET: imagenet
+  IM_SIZE: 256
+  BATCH_SIZE: 400
+  # ADDITIONAL_ARCHS: [[[128, 256, 512, 1536], [2, 4, 8, 24]], [[64, 128, 384, 768], [2, 4, 8, 16]], [[128, 256, 512, 1536], [4, 8, 16, 32]], [[128, 256, 768, 1536], [4, 8, 12, 24]]]
+NUM_GPUS: 8
+OUT_DIR: .
