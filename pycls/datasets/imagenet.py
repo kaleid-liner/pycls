@@ -11,6 +11,7 @@ import os
 import re
 
 import cv2
+import tarfile
 import numpy as np
 import pycls.core.logging as logging
 import pycls.datasets.transforms as transforms
@@ -117,6 +118,85 @@ class ImageNet(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self._imdb)
+
+
+class ImageTarDataset(torch.utils.data.Dataset):
+    def __init__(self, data_path, split):
+        assert os.path.exists(data_path), "Data path '{}' not found".format(data_path)
+        splits = ["train", "val"]
+        assert split in splits, "Split '{}' not supported for ImageNet".format(split)
+        logger.info("Constructing ImageNet {}...".format(split))
+        tar_file = os.path.join(data_path, "{}.tar".format(split))
+        self.tar_file = tar_file
+        self.tar_handle = None
+        categories_set = set()
+        self.tar_members = []
+        self.categories = {}
+        self.categories_to_examples = {}
+        self._split = split
+        with tarfile.open(tar_file, "r:") as tar:
+            for index, tar_member in enumerate(tar.getmembers()):
+                if tar_member.name.count("/") != 2:
+                    continue
+                category = self._get_category_from_filename(tar_member.name)
+                categories_set.add(category)
+                self.tar_members.append(tar_member)
+                cte = self.categories_to_examples.get(category, [])
+                cte.append(index)
+                self.categories_to_examples[category] = cte
+        categories_set = sorted(categories_set)
+        for index, category in enumerate(categories_set):
+            self.categories[category] = index
+        self.num_examples = len(self.tar_members)
+        self.indices = np.arange(self.num_examples)
+        self.num = self.__len__()
+        logger.info(
+            "Loaded the dataset from {}. It contains {} samples.".format(tar_file, self.num)
+        )
+
+    def _get_category_from_filename(self, filename):
+        begin = filename.find("/")
+        begin += 1
+        end = filename.find("/", begin)
+        return filename[begin:end]
+
+    def __len__(self):
+        return self.num_examples
+
+    def _prepare_im(self, im):
+        """Prepares the image for network input (HWC/BGR/int -> CHW/BGR/float)."""
+        # Convert HWC/BGR/int to HWC/RGB/float format for applying transforms
+        im = im[:, :, ::-1].astype(np.float32) / 255
+        # Train and test setups differ
+        train_size, test_size = cfg.TRAIN.IM_SIZE, cfg.TEST.IM_SIZE
+        if self._split == "train":
+            # For training use random_sized_crop, horizontal_flip, augment, lighting
+            im = transforms.random_sized_crop(im, train_size)
+            im = transforms.horizontal_flip(im, prob=0.5)
+            im = transforms.augment(im, cfg.TRAIN.AUGMENT)
+            im = transforms.lighting(im, cfg.TRAIN.PCA_STD, _EIG_VALS, _EIG_VECS)
+        else:
+            # For testing use scale and center crop
+            im = transforms.scale_and_center_crop(im, test_size, train_size)
+        # For training and testing use color normalization
+        im = transforms.color_norm(im, _MEAN, _STD)
+        # Convert HWC/RGB/float to CHW/BGR/float format
+        im = np.ascontiguousarray(im[:, :, ::-1].transpose([2, 0, 1]))
+        return im
+
+    def __getitem__(self, index):
+        index = self.indices[index]
+        if self.tar_handle is None:
+            self.tar_handle = tarfile.open(self.tar_file, "r:")
+
+        sample = self.tar_handle.extractfile(self.tar_members[index])
+        im = cv2.imread(sample)
+        im = self._prepare_im(im)
+
+        category = self.categories[
+            self._get_category_from_filename(self.tar_members[index].name)
+        ]
+        return im, category
 
 
 class ImageNetFFCV:

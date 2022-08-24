@@ -23,12 +23,12 @@ BN:
   ZERO_INIT_FINAL_GAMMA: True
   USE_PRECISE_STATS: False
 TRAIN:
-  DATASET: imagenet
+  DATASET: imagenet-tar
   IM_SIZE: 224
   BATCH_SIZE: 512
   ELASTIC_SIZE: 4
 TEST:
-  DATASET: imagenet
+  DATASET: imagenet-tar
   IM_SIZE: 256
   BATCH_SIZE: 400
   # ADDITIONAL_ARCHS: [[[128, 256, 512, 1536], [2, 4, 8, 24]], [[64, 128, 384, 768], [2, 4, 8, 16]], [[128, 256, 512, 1536], [4, 8, 16, 32]], [[128, 256, 768, 1536], [4, 8, 12, 24]]]
