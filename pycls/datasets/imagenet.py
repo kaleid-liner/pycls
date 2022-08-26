@@ -190,7 +190,7 @@ class ImageTarDataset(torch.utils.data.Dataset):
             self.tar_handle = tarfile.open(self.tar_file, "r:")
 
         sample = self.tar_handle.extractfile(self.tar_members[index])
-        im = cv2.imread(sample)
+        im = cv2.imdecode(np.asarray(bytearray(sample.read()), dtype=np.uint8))
         im = self._prepare_im(im)
 
         category = self.categories[
