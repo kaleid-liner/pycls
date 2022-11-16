@@ -134,6 +134,37 @@ _C.DYNAMICANYNET.SE_ON = False
 _C.DYNAMICANYNET.SE_R = 0.25
 
 
+# ---------------------------------- DynamicRegNet options --------------------------- #
+_C.DYNAMICREGNET = CfgNode()
+
+_C.DYNAMICREGNET.WA_RANGE = [24, 73]
+
+_C.DYNAMICREGNET.W0_RANGE = [48, 216]
+
+_C.DYNAMICREGNET.WM_RANGE = [2, 3]
+
+_C.DYNAMICREGNET.D_RANGE = [17, 25]
+
+_C.DYNAMICREGNET.G_RANGE = [24, 120]
+
+_C.DYNAMICREGNET.GM_RANGE = [1.2, 2]
+
+_C.DYNAMICREGNET.WS_RANGE = [[72, 120], [168, 240], [408, 720], [912, 1920]]
+
+_C.DYNAMICREGNET.DS_RANGE = [[2, 2], [4, 6], [10, 15], [1, 2]]
+
+_C.DYNAMICREGNET.STEM_W = [32]
+
+
+# ---------------------------------- MBDynamicAnyNet options --------------------------- #
+_C.MBDYNAMICANYNET = CfgNode()
+
+_C.MBDYNAMICANYNET.DM_RANGE = [0.66, 1.0]
+
+_C.MBDYNAMICANYNET.WM_RANGE = [0.5, 1.0]
+
+_C.MBDYNAMICANYNET.N_BRANCH = 2
+
 # ---------------------------------- RegNet options ---------------------------------- #
 _C.REGNET = CfgNode()
 
@@ -500,6 +531,10 @@ _C.DOWNLOAD_CACHE = "/tmp/pycls-download-cache"
 
 # Dataset path
 _C.DATA_PATH = ""
+
+_C.ONNX_EXEC_PATH = ""
+
+_C.ONNX_MODEL_TMP_DIR = ""
 
 
 # ---------------------------------- Default config ---------------------------------- #

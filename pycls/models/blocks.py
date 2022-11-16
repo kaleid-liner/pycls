@@ -13,6 +13,8 @@ import torch.nn as nn
 from pycls.core.config import cfg
 from torch.nn import Module
 
+from pycls.elastic.utils import make_divisible
+
 
 # ----------------------- Shortcuts for common torch.nn layers ----------------------- #
 
@@ -222,7 +224,7 @@ def adjust_block_compatibility(ws, bs, gs):
     ms = [np.lcm(g, int(b)) if b > 1 else g for g, b in zip(gs, bs)]
     vs = [max(m, int(round(v / m) * m)) for v, m in zip(vs, ms)]
     ws = [int(v / b) for v, b in zip(vs, bs)]
-    assert all(w * b % g == 0 for w, b, g in zip(ws, bs, gs))
+    assert all(w * b % g == 0 for w, b, g in zip(ws, bs, gs)), "w: {} b: {} g: {}".format(ws, bs, gs)
     return ws, bs, gs
 
 

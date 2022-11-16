@@ -105,7 +105,7 @@ class DynamicSeparableConv2d(nn.Module):
 
 class DynamicConv2d(nn.Module):
     def __init__(
-        self, max_w_in, max_w_out, kernel_size=1, stride=1, dilation=1
+        self, max_w_in, max_w_out, kernel_size=1, stride=1, dilation=1, bias=False
     ):
         super(DynamicConv2d, self).__init__()
 
@@ -114,13 +114,14 @@ class DynamicConv2d(nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         self.dilation = dilation
+        self.bias = bias
 
         self.conv = nn.Conv2d(
             self.max_w_in,
             self.max_w_out,
             self.kernel_size,
             stride=self.stride,
-            bias=False,
+            bias=bias,
         )
 
         self.active_w_out = self.max_w_out
@@ -128,14 +129,18 @@ class DynamicConv2d(nn.Module):
     def get_active_filter(self, w_out, w_in):
         return self.conv.weight[:w_out, :w_in, :, :]
 
+    def get_active_bias(self, w_out):
+        return self.conv.bias[:w_out]
+
     def forward(self, x, w_out=None):
         if w_out is None:
             w_out = self.active_w_out
         w_in = x.size(1)
         filters = self.get_active_filter(w_out, w_in)
+        bias = self.get_active_bias(w_out) if self.bias else None
 
         padding = get_same_padding(self.kernel_size)
-        y = F.conv2d(x, filters, None, self.stride, padding, self.dilation, 1)
+        y = F.conv2d(x, filters, bias, self.stride, padding, self.dilation, 1)
         return y
 
 
@@ -302,7 +307,7 @@ class DynamicBatchNorm2d(nn.BatchNorm2d):
         super().__init__(
             self.num_features_max, affine=True, track_running_stats=False)
         # for tracking performance during training
-        self.tracked_widths = [num_features_list[-1], num_features_list[0]] + num_features_list[1:-1]
+        self.tracked_widths = num_features_list
         self.bn = nn.ModuleList([nn.BatchNorm2d(w, affine=False) for w in self.tracked_widths])
 
     def forward(self, input):
@@ -315,7 +320,7 @@ class DynamicBatchNorm2d(nn.BatchNorm2d):
                 self.bn[idx].running_var[:c],
                 self.weight[:c],
                 self.bias[:c],
-                self.bn[idx].training,
+                self.training,
                 self.momentum,
                 self.eps)
         else:

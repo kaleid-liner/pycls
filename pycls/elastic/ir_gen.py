@@ -29,3 +29,14 @@ def linear_ir(ir, hw, w_in, w_out):
         "hw": hw,
     })
     return ir, hw
+
+
+def se_ir(ir, hw, w_in, w_se):
+    old_hw = hw
+    
+    ir, hw = gap2d_ir(ir, hw, w_in)
+    ir, hw = conv2d_ir(ir, hw, w_in, w_se, 1, type="conv-relu")
+    ir, hw = conv2d_ir(ir, hw, w_se, w_in, 1, type="conv-sigmoid")
+
+    hw = old_hw
+    return ir, hw

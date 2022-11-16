@@ -12,6 +12,9 @@ import pycls.core.net as net
 import pycls.datasets.loader as loader
 import torch
 import torch.cuda.amp as amp
+import re
+import os
+import subprocess
 from pycls.core.config import cfg
 from pycls.core.timer import Timer
 
@@ -146,3 +149,20 @@ def compute_time_full(model, loss_fun, train_loader, test_loader):
     # Compute data loader overhead (assuming DATA_LOADER.NUM_WORKERS>1)
     overhead = max(0, train_loader_time - train_fw_bw_time) / train_fw_bw_time
     logger.info("Overhead of data loader is {:.2f}%".format(overhead * 100))
+
+
+class EnergyPredictor:
+    def __init__(self, model_dir, exec_path):
+        self.model_dir = model_dir
+        self.exec_path = exec_path
+        self.pattern = re.compile(r'#latency:([0-9]+[\.]?[0-9]*),energy:([0-9]+[\.]?[0-9]*)')
+        
+    def profile(self, net):
+        dummy_input = torch.randn(1, 3, 224, 224)
+        model_path = os.path.join(self.model_dir, 'model.onnx')
+        torch.onnx.export(net, dummy_input, model_path)
+        cmd = [self.exec_path, '-i', model_path, '-r 100', '-w', '-x 2', '-t 10.0']
+        ret = subprocess.run(' '.join(cmd), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ret = str(ret.stdout)
+        res = self.pattern.findall(ret)[0]
+        return {'latency' : res[0], 'energy' : res[1]}

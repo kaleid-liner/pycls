@@ -26,7 +26,7 @@ def make_divisible(v, divisor, min_val=None):
     # Make sure that round down does not go down by more than 10%.
     if new_v < 0.9 * v:
         new_v += divisor
-    return 
+    return new_v
 
 
 def get_same_padding(kernel_size):

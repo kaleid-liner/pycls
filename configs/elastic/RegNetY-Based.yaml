@@ -1,0 +1,39 @@
+MODEL:
+  TYPE: dynamicregnet
+  NUM_CLASSES: 1000
+REGNET:
+  SE_ON: true
+DYNAMICREGNET:
+  WA_RANGE: [24, 73]
+  W0_RANGE: [48, 216]
+  WM_RANGE: [2, 3]
+  D_RANGE: [17, 25]
+  G_RANGE: [24, 120]
+  GM_RANGE: [1.2, 2]
+  WS_RANGE: [[72, 120], [168, 240], [408, 720], [912, 1920]]
+  DS_RANGE: [[2, 2], [4, 6], [10, 15], [1, 2]]
+OPTIM:
+  LR_POLICY: exp2
+  BASE_LR: 0.4
+  MAX_EPOCH: 300
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 5e-5
+  WARMUP_EPOCHS: 5
+  STEP: 2.4
+  LR_MULT: 0.97
+BN:
+  ZERO_INIT_FINAL_GAMMA: True
+  USE_PRECISE_STATS: False
+TRAIN:
+  DATASET: imagenet-tar
+  IM_SIZE: 224
+  BATCH_SIZE: 512
+  ELASTIC_SIZE: 4
+TEST:
+  DATASET: imagenet-tar
+  IM_SIZE: 256
+  BATCH_SIZE: 400
+NUM_GPUS: 4
+OUT_DIR: .
+ONNX_EXEC_PATH: /home/t-chengluo/donglinb/Projects/carbon_validation/onnx_based_analysis/run_onnx_models/jianyu_build/run_ort_clean
+ONNX_MODEL_TMP_DIR: /data1/chengluo/tmp

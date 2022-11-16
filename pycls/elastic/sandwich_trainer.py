@@ -33,7 +33,7 @@ from pycls.core.io import cache_url, pathmgr
 from pycls.core.net import unwrap_model
 from pycls.elastic.utils import bn_calibration_init
 
-from .arch_manager import ArchManager
+from .arch_manager import RegNetBasedArchManager, MBBasedArchManger
 
 logger = logging.get_logger(__name__)
 
@@ -155,7 +155,7 @@ def setup_model():
 
     logger.info("Model:\n{}".format(model)) if cfg.VERBOSE else ()
     # Log model complexity
-    logger.info(logging.dump_log_data(net.complexity(model), "complexity"))
+    # logger.info(logging.dump_log_data(net.complexity(model), "complexity"))
     # Transfer the model to the current GPU device
     cur_device = torch.cuda.current_device()
     model = model.cuda(device=cur_device)
@@ -323,7 +323,8 @@ def train_sandwich_elastic():
     loss_fun = builders.build_loss_fun().cuda()
     optimizer = optim.construct_optimizer(model)
     # Construct arch manager
-    arch_manager = ArchManager()
+    # arch_manager = RegNetBasedArchManager()
+    arch_manager = MBBasedArchManger()
     # Load checkpoint or initial weights
     start_epoch = 0
     if cfg.TRAIN.AUTO_RESUME and cp.has_checkpoint():
@@ -366,7 +367,7 @@ def train_sandwich_elastic():
         ema_err = max(ema_meter.get_epoch_stats(cur_epoch)["top1_err"] for ema_meter in ema_meters)
         # Save a checkpoint
         file = cp.save_checkpoint(model, ema, optimizer, cur_epoch, test_err, ema_err)
-        # cp.delete_checkpoints(keep="last")
+        cp.delete_checkpoints(keep="last")
         logger.info("Wrote checkpoint to: {}".format(file))
 
 
@@ -404,13 +405,13 @@ def cal_model():
     test_ema_meters = [meters.TestMeter(len(test_loader), phase="test_ema_arch{}".format(i)) for i in range(arch_manager.len_archs)]
     # Calibrate the model
     cal_epoch(train_loader, model, cal_meters, arch_manager, 0)
-    # cal_epoch(train_loader, ema, cal_ema_meters, arch_manager, 0)
+    cal_epoch(train_loader, ema, cal_ema_meters, arch_manager, 0)
     # Save checkpoint
     file = cp.save_checkpoint(model, ema, optim.construct_optimizer(model), 0, 0, 0)
     logger.info("Wrote checkpoint to: {}".format(file))
     # Evaluate the model
     test_epoch(test_loader, model, test_meters, arch_manager, 0)
-    # test_epoch(test_loader, ema, test_ema_meters, arch_manager, 0)
+    test_epoch(test_loader, ema, test_ema_meters, arch_manager, 0)
 
 
 def time_model():
@@ -436,7 +437,3 @@ def time_model_and_loader():
     test_loader = data_loader.construct_test_loader()
     # Compute model and loader timings
     benchmark.compute_time_full(model, loss_fun, train_loader, test_loader)
-
-
-
-    
