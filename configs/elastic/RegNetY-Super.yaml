@@ -1,0 +1,30 @@
+MODEL:
+  TYPE: anynet
+  NUM_CLASSES: 1000
+ANYNET:
+  STEM_TYPE: simple_stem_in
+  STEM_W: 32
+  BLOCK_TYPE: res_bottleneck_block
+  DEPTHS: [2, 6, 15, 2]
+  WIDTHS: [120, 240, 720, 1920]
+  STRIDES: [2, 2, 2, 2]
+  BOT_MULS: [1.0, 1.0, 1.0, 1.0]
+  GROUP_WS: [120, 120, 120, 120]
+  SE_ON: True
+OPTIM:
+  LR_POLICY: cos
+  BASE_LR: 0.4
+  MAX_EPOCH: 100
+  MOMENTUM: 0.9
+  WEIGHT_DECAY: 5e-5
+  WARMUP_EPOCHS: 5
+TRAIN:
+  DATASET: imagenet-tar
+  IM_SIZE: 224
+  BATCH_SIZE: 512
+TEST:
+  DATASET: imagenet-tar
+  IM_SIZE: 256
+  BATCH_SIZE: 400
+NUM_GPUS: 8
+OUT_DIR: .
