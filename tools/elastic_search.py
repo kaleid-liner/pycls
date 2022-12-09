@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument("--serial", required=False, default="", type=str)
     parser.add_argument("--tmp_path", default="/home/eka/pycls/tflite_models", type=str)
     parser.add_argument("--output_csv", default="stage_candidates.csv", type=str)
+    parser.add_argument("--bin_path", default="/data/local/tmp/stretch-bin/benchmark_model_2_8", type=str)
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
@@ -37,7 +38,7 @@ model = builders.build_model()
 arch = arch_manager.random_sample()
 model.set_active_subnet(**arch)
 
-predictor = LatencyPredictor(env_args.tmp_path, env_args.host, env_args.serial)
+predictor = LatencyPredictor(env_args.tmp_path, env_args.host, env_args.serial, env_args.bin_path)
 
 strides = [1, 2, 2, 2]
 hws = [56, 56, 28, 14]

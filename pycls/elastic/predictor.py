@@ -21,12 +21,13 @@ def get_representative_dataset(input_shape):
 
 
 class LatencyPredictor:
-    def __init__(self, output_dir, host="127.0.0.1", serial=""):
+    def __init__(self, output_dir, host="127.0.0.1", serial="", bin_path=""):
         self.err = 0.2
         self.output_dir = output_dir
         self.host = host
         self.remote_dir = "/data/local/tmp/elastic-search"
         self.serial = serial
+        self.bin_path = bin_path
 
     def _gen_model(self, hw, w_in, w_out, stride, d):
         params = {"bot_mul": 0.25, "group_w": w_out // 4, "se_r": 0.25, "k": 3}
@@ -83,7 +84,7 @@ class LatencyPredictor:
         remote_path = os.path.join(self.remote_dir, model_name)
         device.push(output_path, remote_path)
     
-        command = "taskset f0 /data/local/tmp/benchmark_model_2_8 --graph={} --use_gpu={} --num_threads=4 --use_xnnpack=false --enable_op_profiling=true --max_delegated_partitions=100 --warmup_min_secs=0 --min_secs=0 --warmup_runs=5 --num_runs=50".format(remote_path, use_gpu)
+        command = "taskset f0 {} --graph={} --use_gpu={} --num_threads=4 --use_xnnpack=false --enable_op_profiling=true --max_delegated_partitions=100 --warmup_min_secs=0 --min_secs=0 --warmup_runs=5 --num_runs=50".format(self.bin_path, remote_path, use_gpu)
         res = device.shell(command)
 
         return LatencyPredictor._parse(res)
