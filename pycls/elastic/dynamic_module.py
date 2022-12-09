@@ -155,7 +155,7 @@ class DynamicBottleneckTransform(DynamicModule):
     def complexity(cx, w_in, w_out, stride, params):
         w_b = int(round(w_out * params["bot_mul"]))
         w_se = int(round(w_in * params["se_r"]))
-        groups = params["min_groups"]
+        groups = w_b // params["group_w"]
         cx = conv2d_cx(cx, w_in, w_b, 1)
         cx = norm2d_cx(cx, w_b)
         cx = conv2d_cx(cx, w_b, w_b, 3, stride=stride, groups=groups)

@@ -299,3 +299,17 @@ class MBBasedArchManger(RegNetBasedArchManager):
             "bss": list(zip(*bss)),
             "gss": list(zip(*gss)),
         })
+
+    def iter_branch(self, stage):
+        b = 0.25
+        for d in range(self.min_ds[stage], self.max_ds[stage] + 1):
+            for g in np.linspace(self.min_gs[stage], self.max_gs[stage] + 1, 10, True):
+                g = make_divisible(g, 8)
+                w = make_divisible(g / b, 8)
+                yield (d, w)
+
+    def max_branch(self, stage):
+        return (self.max_ds[stage], self.max_ws[stage])
+
+    def min_branch(self, stage):
+        return (self.min_ds[stage], self.min_ws[stage])
