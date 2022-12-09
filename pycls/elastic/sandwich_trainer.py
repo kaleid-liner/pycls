@@ -323,8 +323,8 @@ def train_sandwich_elastic():
     loss_fun = builders.build_loss_fun().cuda()
     optimizer = optim.construct_optimizer(model)
     # Construct arch manager
-    # arch_manager = RegNetBasedArchManager()
-    arch_manager = MBBasedArchManger()
+    arch_manager = RegNetBasedArchManager()
+    # arch_manager = MBBasedArchManger()
     # Load checkpoint or initial weights
     start_epoch = 0
     if cfg.TRAIN.AUTO_RESUME and cp.has_checkpoint():
