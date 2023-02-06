@@ -49,6 +49,8 @@ beta = 0.8
 gamma = 0.8
 diff = 0.2
 
+devices = ["dsp", "gpu"]
+
 candidates = []
 for stage in range(0, 4):
     w_in = w_ins[stage]
@@ -57,16 +59,16 @@ for stage in range(0, 4):
     max_d, max_w = arch_manager.max_branch(stage)
     args = (hw, w_in, max_w, s, max_d)
     max_flops = predictor.get_flops(*args)
-    max_cpu_lat = predictor.predict(*args, "cpu")
-    max_gpu_lat = predictor.predict(*args, "gpu")
-    if max_cpu_lat < max_gpu_lat:
-        main_device = "cpu"
-        sub_device = "gpu"
-        max_lat = max_cpu_lat
+    max_lat_0 = predictor.predict(*args, devices[0])
+    max_lat_1 = predictor.predict(*args, devices[1])
+    if max_lat_0 < max_lat_1:
+        main_device = devices[0]
+        sub_device = devices[1]
+        max_lat = max_lat_0
     else:
-        main_device = "gpu"
-        sub_device = "cpu"
-        max_lat = max_gpu_lat
+        main_device = devices[1]
+        sub_device = devices[0]
+        max_lat = max_lat_1
 
     for d, w in arch_manager.iter_branch(stage):
         args = (hw, w_in, w, s, d)

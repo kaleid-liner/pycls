@@ -28,6 +28,7 @@ class LatencyPredictor:
         self.remote_dir = "/data/local/tmp/elastic-search"
         self.serial = serial
         self.bin_path = bin_path
+        self.dsp_bin_path = "/data/local/tmp/stretch-bin/benchmark_model_jianyu_only_dsp"
 
     def _gen_model(self, hw, w_in, w_out, stride, d):
         params = {"bot_mul": 0.25, "group_w": w_out // 4, "se_r": 0.25, "k": 3}
@@ -70,10 +71,8 @@ class LatencyPredictor:
     def predict(self, hw, w_in, w_out, stride, d, device="cpu"):
         model_name, output_path = self._gen_model(hw, w_in, w_out, stride, d)
 
-        if device == "cpu":
-            use_gpu = "false"
-        else:
-            use_gpu = "true"
+        use_gpu = "true" if device == "gpu" else "false"
+        use_hexagon = "true" if device == "hexagon" else "false"
 
         client = AdbClient(self.host, port=5037)
         if self.serial:
@@ -83,8 +82,9 @@ class LatencyPredictor:
 
         remote_path = os.path.join(self.remote_dir, model_name)
         device.push(output_path, remote_path)
-    
-        command = "taskset f0 {} --graph={} --use_gpu={} --num_threads=4 --use_xnnpack=false --enable_op_profiling=true --max_delegated_partitions=100 --warmup_min_secs=0 --min_secs=0 --warmup_runs=5 --num_runs=50".format(self.bin_path, remote_path, use_gpu)
+
+        bin_path = self.bin_path if device != "dsp" else self.dsp_bin_path 
+        command = "taskset f0 {} --graph={} --use_gpu={} --use_hexagon={} --num_threads=4 --use_xnnpack=false --enable_op_profiling=true --max_delegated_partitions=100 --warmup_min_secs=0 --min_secs=0 --warmup_runs=5 --num_runs=50".format(bin_path, remote_path, use_gpu, use_hexagon)
         res = device.shell(command)
 
         return LatencyPredictor._parse(res)
