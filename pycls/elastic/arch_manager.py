@@ -172,29 +172,64 @@ class RegNetBasedArchManager(ArchManager):
 
             return arch_l, arch_r
 
-    def random_sample_regnet(self):
+    def random_sample_w_a(self):
+        return rand.log_uniform(self.min_w_a, self.max_w_a, 0.1)
+
+    def random_sample_w_0(self):
+        return rand.log_uniform(self.min_w_0, self.max_w_0, 8)
+    
+    def random_sample_w_m(self):
+        return rand.log_uniform(self.min_w_m, self.max_w_m, 0.001)
+
+    def random_sample_d(self):
+        return rand.uniform(self.min_d, self.max_d, 1)
+    
+    def random_sample_g(self):
+        return rand.log_uniform(self.min_g, self.max_g, 8)
+
+    def random_sample_g2(self):
+        return rand.log_uniform(self.min_g, self.max_g, 8)
+
+    def random_sample_regnet(self, raw_arch=None, based_raw_arch=None, retry=True, validate_range=True):
+        if based_raw_arch is None:
+            based_raw_arch = {}
+
         while True:
-            w_a = rand.log_uniform(self.min_w_a, self.max_w_a, 0.1)
-            w_0 = rand.log_uniform(self.min_w_0, self.max_w_0, 8)
-            w_m = rand.log_uniform(self.min_w_m, self.max_w_m, 0.001)
-            d = rand.uniform(self.min_d, self.max_d, 1)
-            g = rand.log_uniform(self.min_g, self.max_g, 8)
+            w_a = based_raw_arch.get("w_a", self.random_sample_w_a())
+            w_0 = based_raw_arch.get("w_0", self.random_sample_w_0())
+            w_m = based_raw_arch.get("w_m", self.random_sample_w_m())
+            d = based_raw_arch.get("d", self.random_sample_d())
+            g = based_raw_arch.get("g", self.random_sample_g())
             ws, ds, ss, bs, gs = generate_regnet_full(w_a, w_0, w_m, d, g)
+            based_raw_arch = {}  # break inf loop
 
             if len(ws) != 4:
+                if not retry:
+                    break
                 continue
 
             # validate d, w range
-            if not validate_list_in_range(ds, self.min_ds, self.max_ds) or \
-               not validate_list_in_range(ws, self.min_ws, self.max_ws):
+            if validate_range and (
+                not validate_list_in_range(ds, self.min_ds, self.max_ds) or
+                not validate_list_in_range(ws, self.min_ws, self.max_ws)
+            ):
+                if not retry:
+                    break
                 continue
 
+            if raw_arch is not None:
+                raw_arch.update({"w_a": w_a, "w_0": w_0, "w_m": w_m, "d": d, "g": g, "g2": g})
             return self._sample({"ws": ws, "ds": ds, "bs": bs, "gs": gs})
 
-    def random_sample(self, based_arch=None):
+    def random_sample(self, raw_arch=None, based_arch=None, based_raw_arch=None, retry=True, validate_range=True):
+        if based_raw_arch is None:
+            based_raw_arch = {}
+
         while True:
             if based_arch is None:
-                based_arch = self.random_sample_regnet()
+                based_arch = self.random_sample_regnet(raw_arch=raw_arch, based_raw_arch=based_raw_arch, retry=retry, validate_range=validate_range)
+                if based_arch is None and not retry:
+                    break
             else:
                 based_arch = copy.deepcopy(based_arch)
             ws, ds, bs, gs = based_arch["ws"], based_arch["ds"], based_arch["bs"], based_arch["gs"]
@@ -202,21 +237,47 @@ class RegNetBasedArchManager(ArchManager):
 
             min_g = min(self.min_g_m * g, self.max_g)
             max_g = min(self.max_g_m * g, self.max_g)
-            new_g = rand.uniform(min_g, max_g, 8)
+            new_g = based_raw_arch.get("g2", rand.uniform(min_g, max_g, 8))
             g_m = new_g / g
 
             gs[2] = gs[3] = new_g
-            ws[2] /= g_m ** .25
-            ws[1] *= g_m ** .25
+
+            based_arch = None  # break inf loop
+            based_raw_arch = {}
 
             ws, bs, gs = bk.adjust_block_compatibility(ws, bs, gs)
-            if not validate_list_in_range(ds, self.min_ds, self.max_ds) or \
-               not validate_list_in_range(ws, self.min_ws, self.max_ws) or \
-               not validate_list_in_range(gs, self.min_g, self.max_g):
-                based_arch = None
+            if validate_range and (
+                not validate_list_in_range(ds, self.min_ds, self.max_ds) or
+                not validate_list_in_range(ws, self.min_ws, self.max_ws) or
+                not validate_list_in_range(gs, self.min_g, self.max_g)
+            ):
+                if not retry:
+                    break
                 continue
 
+            if raw_arch is not None:
+                raw_arch.update({"g2": new_g})
             return self._sample({"ws": ws, "ds": ds, "bs": bs, "gs": gs})
+
+    def mutate(self, raw_arch, prob):
+        while True:
+            new_raw_arch = raw_arch.copy()
+            
+            for key in new_raw_arch.keys():
+                if random.random() < prob:
+                    new_raw_arch[key] = getattr(self, "random_sample_{}".format(key))()
+                
+            if self.random_sample(based_raw_arch=new_raw_arch, retry=False):
+                return new_raw_arch
+
+    def crossover(self, raw_arch1, raw_arch2):
+        while True:
+            new_raw_arch = {}
+            for key in raw_arch1.keys():
+                new_raw_arch[key] = random.choice([raw_arch1[key], raw_arch2[key]])
+
+            if self.random_sample(based_raw_arch=new_raw_arch, retry=False):
+                return new_raw_arch
 
     @property
     def len_archs(self):

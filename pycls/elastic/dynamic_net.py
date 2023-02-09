@@ -169,7 +169,7 @@ class DynamicRegNet(DynamicModule):
             "ws_range": cfg.DYNAMICREGNET.WS_RANGE,
             "ds_range": cfg.DYNAMICREGNET.DS_RANGE,
             "stem_type": cfg.REGNET.STEM_TYPE,
-            "stem_w": cfg.DYNAMICREGNET.STEM_W,
+            "stem_w": [cfg.REGNET.STEM_W],
             "block_type": cfg.REGNET.BLOCK_TYPE,
             "strides": [cfg.REGNET.STRIDE] * 4,
             "bot_muls": [cfg.REGNET.BOT_MUL] * 4,
@@ -206,37 +206,44 @@ class DynamicRegNet(DynamicModule):
             getattr(self, "s{}".format(i + 1)).set_active_subnet(w=w, d=d, b=b, g=g)
 
     @staticmethod
-    def complexity(cx, params=None):
+    def complexity(cx=None, ws=None, ds=None, bs=None, gs=None, params=None):
         """Computes model complexity (if you alter the model, make sure to update)."""
-        p = DynamicAnyNet.get_params() if not params else params
+        if cx is None:
+            size = cfg.TRAIN.IM_SIZE
+            cx = {"h": size, "w": size, "flops": 0, "params": 0, "acts": 0}
+        p = DynamicRegNet.get_params() if not params else params
+        p["widths"] = ws or [max(w) for w in p["widths"]]
+        p["depths"] = ds or [max(d) for d in p["depths"]]
+        p["groups"] = gs or [min(g) for g in p["groups"]]
+        p["bot_muls"] = bs or p["bot_muls"]
         stem_fun = get_stem_fun(p["stem_type"])
         block_fun = get_block_fun(p["block_type"])
         cx = stem_fun.complexity(cx, 3, max(p["stem_w"]))
         prev_w = max(p["stem_w"])
         keys = ["depths", "widths", "strides", "bot_muls", "groups"]
         for d, w, s, b, g in zip(*[p[k] for k in keys]):
-            params = {"bot_mul": b, "min_groups": min(g), "se_r": p["se_r"]}
-            w = max(w)
+            params = {"bot_mul": b, "group_w": g, "se_r": p["se_r"]}
             cx = DynamicAnyStage.complexity(cx, prev_w, w, s, d, block_fun, params)
             prev_w = w
         cx = DynamicAnyHead.complexity(cx, prev_w, p["head_w"], p["num_classes"])
         return cx
 
     @staticmethod
-    def gen_ir(ir=None, hw=224, widths=None, groups=None, params=None):
+    def gen_ir(ir=None, hw=224, ws=None, ds=None, bs=None, gs=None, params=None):
         if ir is None:
             ir = []
-        p = DynamicAnyNet.get_params() if not params else params
-        p["widths"] = widths or [max(w) for w in p["widths"]]
-        p["groups"] = groups or [min(g) for g in p["groups"]]
-        p["stem_w"] = max(p["stem_w"])
+        p = DynamicRegNet.get_params() if not params else params
+        p["widths"] = ws or [max(w) for w in p["widths"]]
+        p["depths"] = ds or [max(d) for d in p["depths"]]
+        p["groups"] = gs or [min(g) for g in p["groups"]]
+        p["bot_muls"] = bs or p["bot_muls"]
         stem_fun = get_stem_fun(p["stem_type"])
         block_fun = get_block_fun(p["block_type"])
-        ir, hw = stem_fun.gen_ir(ir, hw, 3, p["stem_w"])
-        prev_w = p["stem_w"]
+        ir, hw = stem_fun.gen_ir(ir, hw, 3, max(p["stem_w"]))
+        prev_w = max(p["stem_w"])
         keys = ["depths", "widths", "strides", "bot_muls", "groups"]
         for d, w, s, b, g in zip(*[p[k] for k in keys]):
-            params = {"bot_mul": b, "min_groups": g, "se_r": p["se_r"]}
+            params = {"bot_mul": b, "group_w": g, "se_r": p["se_r"]}
             ir, hw = DynamicAnyStage.gen_ir(ir, hw, prev_w, w, s, d, block_fun, params)
             prev_w = w
         ir, hw = DynamicAnyHead.gen_ir(ir, hw, prev_w, p["head_w"], [["num_classes"]])

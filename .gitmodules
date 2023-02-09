@@ -1,0 +1,3 @@
+[submodule "pycls/CUDAKernelEnergyPredictor"]
+	path = pycls/CUDAKernelEnergyPredictor
+	url = https://github.com/Starmys/CUDAKernelEnergyPredictor

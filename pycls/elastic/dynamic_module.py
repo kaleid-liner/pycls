@@ -169,7 +169,7 @@ class DynamicBottleneckTransform(DynamicModule):
     def gen_ir(ir, hw, w_in, w_out, stride, params):
         w_b = int(round(w_out * params["bot_mul"]))
         w_se = int(round(w_in * params["se_r"]))
-        groups = params["groups"]
+        groups = w_b // params["group_w"]
         ir, hw = conv2d_ir(ir, hw, w_in, w_b, 1, type="conv-bn-relu")
         ir, hw = conv2d_ir(ir, hw, w_b, w_b, 3, stride, groups, type="conv-bn-relu")
         ir, hw = se_ir(ir, hw, w_b, w_se) if w_se else (ir, hw)
